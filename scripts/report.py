@@ -8,7 +8,7 @@ import sys
 from collections import OrderedDict
 from scripts.html_parts import *
 from scripts.ilapfuncs import logfunc
-from scripts.version_info import aleapp_version, aleapp_contributors
+from scripts.version_info import ileapp_version, ileapp_contributors
 
 # Icon Mappings Dictionary
 # The icon_mappings dictionary is organized by category and is used to map categories and artifacts to icons.
@@ -91,12 +91,14 @@ icon_mappings = \
     },
     'BASH HISTORY': 'terminal',
     'BIOME': 'eye',
+    'BIOME AIRPLANE MODE': 'wifi-off',
     'BIOME APP INSTALL': 'eye',
     'BIOME BACKLIGHT': 'eye',
     'BIOME BATTERY PERC': 'eye',
     'BIOME BLUETOOTH': 'eye',
     'BIOME CARPLAY CONN': 'eye',
     'BIOME DEVICE PLUG': 'eye',
+    'BIOME DEVICE WIFI': 'wifi',
     'BIOME HARDWARE': 'eye',
     'BIOME IN FOCUS': 'eye',
     'BIOME INTENTS': 'eye',
@@ -136,7 +138,10 @@ icon_mappings = \
     },
     'CACHE DATA': 'box',
     'CALCULATOR LOCKER': 'lock',
-    'CALENDAR': 'calendar',
+    'CALENDAR': {
+        'CALENDAR BIRTHDAYS': 'gift',
+        'default': 'calendar',
+    },
     'CALL HISTORY': {
         'CALL HISTORY': 'phone-call',
         'DELETED VOICEMAIL': 'mic-off',
@@ -180,7 +185,10 @@ icon_mappings = \
     },
     'CONNECTED DEVICES': 'smartphone',
     'CONNECTED TO': 'zap',
-    'CONTACTS': 'user',
+    'CONTACTS': {
+        'BLOCKED CONTACTS': 'user-x',
+        'default': 'user',
+    },
     'CONTACT_LIST': 'users',  # TODO: can this use another category?
     'CONTROL CENTER': {
         'CONTROL CENTER - ACTIVE CONTROLS': 'sliders',
@@ -474,6 +482,7 @@ icon_mappings = \
     },
     'ICLOUD SHARED ALBUMS': 'cloud',
     'IDENTIFIERS': 'file',
+    'IMAGE CACHEV0': 'image',
     'IMAGE MANAGER CACHE': 'image',
     'IMO': {
         'IMO - ACCOUNT ID': 'user',
@@ -520,9 +529,10 @@ icon_mappings = \
         'default': 'file-text'
     },
     'KNOWLEDGEC': {
-        'KNOWLEDGEC BATTERY LEVEL': 'battery',
+        'KNOWLEDGEC - BATTERY PERCENTAGE': 'battery',
         'KNOWLEDGEC DEVICE LOCKED': 'lock',
-        'KNOWLEDGEC PLUGGED IN': 'battery-charging',
+        'KNOWLEDGEC - MEDIA PLAYING': 'play-circle',
+        'KNOWLEDGEC - DEVICE PLUGIN STATUS': 'battery-charging',
         'default': 'activity',
     },
     'LEAPP_REPORT': {
@@ -534,6 +544,12 @@ icon_mappings = \
         'LINE - CONTACTS': 'user',
         'LINE - MESSAGES': 'message-square',
         'LINE - CALL LOGS': 'phone',
+    },
+    'LIFE360': {
+        'LIFE360 - CHAT MESSAGES': 'message-circle',
+        'LIFE360 - DEVICE BATTERY': 'battery',
+        'LIFE360 - LOCATIONS': 'map-pin',
+        'LIFE360 - MEMBERS': 'users',
     },
     'LOCATION SERVICES CONFIGURATIONS': 'settings',
     'LOCATIONS': {
@@ -719,6 +735,11 @@ icon_mappings = \
     'SNAPCHAT RETURNS': 'camera',
     'SQLITE JOURNALING': 'book-open',
     'STRAVA': 'map',
+    'SYNCED DEVICES': 'refresh-cw',
+    'SYSDIAGNOSE': {
+        'SYSDIAGNOSE - SHUTDOWN LOG PROCESSES': 'loader',
+        'SYSDIAGNOSE - SHUTDOWN LOG REBOOTS': 'refresh-cw',
+    },
     'TEAMS': {  # TODO: align I & A artifacts since theres a 'microsoft teams' also
         'TEAMS MESSAGES': 'message-circle',
         'TEAMS USERS': 'users',
@@ -729,6 +750,12 @@ icon_mappings = \
     },
     'TANGO': 'message-square',
     'TELEGRAM': 'message-square',
+    'TELEGUARD': {
+        'TELEGUARD CONTACTS': 'users',
+        'TELEGUARD MESSAGES': 'message-square',
+        'TELEGUARD POSTS': 'at-sign',
+        'TELEGUARD CHANNELS': 'home',
+    },
     'TELEMATICS': {
         'GPS DETAIL': 'map-pin',
         'WDWSTATUS REPORT': 'map-pin',
@@ -1015,22 +1042,24 @@ def get_file_content(path):
 
 def create_index_html(reportfolderbase, time_in_secs, time_HMS, extraction_type, image_input_path, nav_list_data, casedata):
     '''Write out the index.html page to the report folder'''
+    case_list = []
     content = '<br />'
     content += """
                    <div class="card bg-white" style="padding: 20px;">
                    <h2 class="card-title">Case Information</h2>
                """  # CARD start
 
-    case_list = [
+    if len(casedata) > 0:
+        for key, value in casedata.items():
+            if value:
+                case_list.append([key, value])
+    
+    case_list += [
         ['Extraction location', image_input_path],
         ['Extraction type', extraction_type],
         ['Report directory', reportfolderbase],
         ['Processing time', f'{time_HMS} (Total {time_in_secs} seconds)']
     ]
-    
-    if len(casedata) > 0:
-        for key, value in casedata.items():
-            case_list.append([key, value])
     
     tab1_content = generate_key_val_table_without_headings('', case_list) + \
         """
@@ -1055,19 +1084,19 @@ def create_index_html(reportfolderbase, time_in_secs, time_HMS, extraction_type,
 
     content += '</div>'  # CARD end
 
-    authors_data = generate_authors_table_code(aleapp_contributors)
+    authors_data = generate_authors_table_code(ileapp_contributors)
     credits_code = credits_block.format(authors_data)
 
     # WRITE INDEX.HTML LAST
     filename = 'index.html'
     page_title = 'iLEAPP Report'
-    body_heading = 'iOS Logs Events And Protobuf Parser'
+    body_heading = 'iOS Logs, Events, And Plists Parser'
     body_description = 'iLEAPP is an open source project that aims to parse every known iOS artifact for the purpose of forensic analysis.'
     active_nav_list_data = mark_item_active(nav_list_data, filename) + nav_bar_script
 
     f = open(os.path.join(reportfolderbase, filename), 'w', encoding='utf8')
     f.write(page_header.format(page_title))
-    f.write(body_start.format(f"iLEAPP {aleapp_version}"))
+    f.write(body_start.format(f"iLEAPP {ileapp_version}"))
     f.write(body_sidebar_setup + active_nav_list_data + body_sidebar_trailer)
     f.write(body_main_header + body_main_data_title.format(body_heading, body_description))
     f.write(content)
@@ -1076,9 +1105,9 @@ def create_index_html(reportfolderbase, time_in_secs, time_HMS, extraction_type,
     f.write(body_main_trailer + body_end + nav_bar_script_footer + page_footer)
     f.close()
 
-def generate_authors_table_code(aleapp_contributors):
+def generate_authors_table_code(ileapp_contributors):
     authors_data = ''
-    for author_name, blog, tweet_handle, git in aleapp_contributors:
+    for author_name, blog, tweet_handle, git in ileapp_contributors:
         author_data = ''
         if blog:
             author_data += f'<a href="{blog}" target="_blank">{blog_icon}</a> &nbsp;\n'
@@ -1146,4 +1175,5 @@ def mark_item_active(data, itemname):
     else:
         ret = data[0: pos] + " active" + data[pos:]
         return ret
+    
     

@@ -12,10 +12,10 @@ from functools import lru_cache
 from pathlib import Path
 
 # common third party imports
-import magic
 import pytz
 import simplekml
 from bs4 import BeautifulSoup
+from scripts.filetype import guess_mime
 
 # LEAPP version unique imports
 import binascii
@@ -64,6 +64,19 @@ def convert_utc_human_to_timezone(utc_time, time_offset):
     #return the converted value
     return timezone_time
 
+def convert_ts_int_to_timezone(time, time_offset):
+    #convert ts_int_to_utc_human
+    utc_time = convert_ts_int_to_utc(time)
+
+    #fetch the timezone information
+    timezone = pytz.timezone(time_offset)
+    
+    #convert utc to timezone
+    timezone_time = utc_time.astimezone(timezone)
+    
+    #return the converted value
+    return timezone_time
+
 def timestampsconv(webkittime):
     unix_timestamp = webkittime + 978307200
     finaltime = datetime.fromtimestamp(unix_timestamp, tz=timezone.utc)
@@ -81,9 +94,22 @@ def convert_ts_int_to_utc(ts): #This int timestamp to human format & utc
     timestamp = datetime.fromtimestamp(ts, tz=timezone.utc)
     return timestamp
 
+def get_birthdate(date):
+    ns_date = date + 978307200
+    utc_date = datetime.utcfromtimestamp(ns_date)
+    return utc_date.strftime('%d %B %Y') if utc_date.year != 1604 else utc_date.strftime('%d %B')
+
+def is_platform_linux():
+    '''Returns True if running on Linux'''
+    return sys.platform == 'linux'
+
+def is_platform_macos():
+    '''Returns True if running on macOS'''
+    return sys.platform == 'darwin'
+
 def is_platform_windows():
     '''Returns True if running on Windows'''
-    return os.name == 'nt'
+    return sys.platform == 'win32'
 
 def utf8_in_extended_ascii(input_string, *, raise_on_unexpected=False):
     """Returns a tuple of bool (whether mis-encoded utf-8 is present) and str (the converted string)"""
@@ -477,7 +503,9 @@ def media_to_html(media_path, files_found, report_folder):
             source = Path(locationfiles, filename)
             source = relative_paths(str(source), splitter)
 
-        mimetype = magic.from_file(match, mime=True)
+        mimetype = guess_mime(match)
+        if mimetype == None:
+            mimetype = ''
 
         if 'video' in mimetype:
             thumb = f'<video width="320" height="240" controls="controls"><source src="{source}" type="video/mp4" preload="none">Your browser does not support the video tag.</video>'
@@ -488,4 +516,155 @@ def media_to_html(media_path, files_found, report_folder):
         else:
             thumb = f'<a href="{source}" target="_blank"> Link to {filename} file</>'
     return thumb
+
+
+def get_resolution_for_model_id(model_id: str):
+    data = [
+        {'Model ID': 'iPhone16,2', 'Model Name': 'iPhone 15 Pro Max', 'Width': 1290, 'Height': 2796},
+        {'Model ID': 'iPhone16,1', 'Model Name': 'iPhone 15 Pro', 'Width': 1179, 'Height': 2556},
+        {'Model ID': 'iPhone15,5', 'Model Name': 'iPhone 15 Plus', 'Width': 1290, 'Height': 2796},
+        {'Model ID': 'iPhone15,4', 'Model Name': 'iPhone 15', 'Width': 1179, 'Height': 2556},
+        {'Model ID': 'iPhone14,8', 'Model Name': 'iPhone 14 Plus', 'Width': 1284, 'Height': 2778},
+        {'Model ID': 'iPhone15,3', 'Model Name': 'iPhone 14 Pro Max', 'Width': 1290, 'Height': 2796},
+        {'Model ID': 'iPhone15,2', 'Model Name': 'iPhone 14 Pro', 'Width': 1179, 'Height': 2556},
+        {'Model ID': 'iPhone14,7', 'Model Name': 'iPhone 14', 'Width': 1170, 'Height': 2532},
+        {'Model ID': 'iPhone14,6', 'Model Name': 'iPhone SE 3rd gen', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone14,5', 'Model Name': 'iPhone 13', 'Width': 1170, 'Height': 2532},
+        {'Model ID': 'iPhone14,4', 'Model Name': 'iPhone 13 mini', 'Width': 1080, 'Height': 2340},
+        {'Model ID': 'iPhone14,3', 'Model Name': 'iPhone 13 Pro Max', 'Width': 1284, 'Height': 2778},
+        {'Model ID': 'iPhone14,2', 'Model Name': 'iPhone 13 Pro', 'Width': 1170, 'Height': 2532},
+        {'Model ID': 'iPhone13,2', 'Model Name': 'iPhone 12', 'Width': 1170, 'Height': 2532},
+        {'Model ID': 'iPhone13,1', 'Model Name': 'iPhone 12 mini', 'Width': 1080, 'Height': 2340},
+        {'Model ID': 'iPhone13,4', 'Model Name': 'iPhone 12 Pro Max', 'Width': 1284, 'Height': 2778},
+        {'Model ID': 'iPhone13,3', 'Model Name': 'iPhone 12 Pro', 'Width': 1170, 'Height': 2532},
+        {'Model ID': 'iPhone12,8', 'Model Name': 'iPhone SE 2nd gen', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone12,5', 'Model Name': 'iPhone 11 Pro Max', 'Width': 1242, 'Height': 2688},
+        {'Model ID': 'iPhone12,3', 'Model Name': 'iPhone 11 Pro', 'Width': 1125, 'Height': 2436},
+        {'Model ID': 'iPhone12,1', 'Model Name': 'iPhone 11', 'Width': 828, 'Height': 1792},
+        {'Model ID': 'iPhone11,8', 'Model Name': 'iPhone XR', 'Width': 828, 'Height': 1792},
+        {'Model ID': 'iPhone11,6', 'Model Name': 'iPhone XS Max', 'Width': 1242, 'Height': 2688},
+        {'Model ID': 'iPhone11,2', 'Model Name': 'iPhone XS', 'Width': 1125, 'Height': 2436},
+        {'Model ID': 'iPhone10,6', 'Model Name': 'iPhone X', 'Width': 1125, 'Height': 2436},
+        {'Model ID': 'iPhone10,3', 'Model Name': 'iPhone X', 'Width': 1125, 'Height': 2436},
+        {'Model ID': 'iPhone10,5', 'Model Name': 'iPhone 8 Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone10,2', 'Model Name': 'iPhone 8 Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone10,4', 'Model Name': 'iPhone 8', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone10,1', 'Model Name': 'iPhone 8', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone9,4', 'Model Name': 'iPhone 7 Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone9,2', 'Model Name': 'iPhone 7 Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone9,3', 'Model Name': 'iPhone 7', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone9,1', 'Model Name': 'iPhone 7', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone8,4', 'Model Name': 'iPhone SE 1st gen', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone8,2', 'Model Name': 'iPhone 6s Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone8,1', 'Model Name': 'iPhone 6s', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone7,1', 'Model Name': 'iPhone 6 Plus', 'Width': 1080, 'Height': 1920},
+        {'Model ID': 'iPhone7,2', 'Model Name': 'iPhone 6', 'Width': 750, 'Height': 1334},
+        {'Model ID': 'iPhone5,3', 'Model Name': 'iPhone 5C', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone5,4', 'Model Name': 'iPhone 5C', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone6,1', 'Model Name': 'iPhone 5S', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone6,2', 'Model Name': 'iPhone 5S', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone5,1', 'Model Name': 'iPhone 5', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone5,2', 'Model Name': 'iPhone 5', 'Width': 640, 'Height': 1136},
+        {'Model ID': 'iPhone4,1', 'Model Name': 'iPhone 4S', 'Width': 640, 'Height': 960},
+        {'Model ID': 'iPhone3,1', 'Model Name': 'iPhone 4', 'Width': 640, 'Height': 960},
+        {'Model ID': 'iPhone3,2', 'Model Name': 'iPhone 4', 'Width': 640, 'Height': 960},
+        {'Model ID': 'iPhone3,3', 'Model Name': 'iPhone 4', 'Width': 640, 'Height': 960},
+        {'Model ID': 'iPhone2,1', 'Model Name': 'iPhone 3GS', 'Width': 320, 'Height': 480},
+        {'Model ID': 'iPhone1,2', 'Model Name': 'iPhone 3G', 'Width': 320, 'Height': 480},
+        {'Model ID': 'iPhone1,1', 'Model Name': 'iPhone 1st gen', 'Width': 320, 'Height': 480},
+        {'Model ID': 'iPad14,5', 'Model Name': 'iPad Pro (6th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad14,6', 'Model Name': 'iPad Pro (6th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad14,3', 'Model Name': 'iPad Pro (4th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad14.4', 'Model Name': 'iPad Pro (4th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad13,18', 'Model Name': 'iPad 10th gen', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad13,19', 'Model Name': 'iPad 10th gen', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad13,17', 'Model Name': 'iPad Air (5th gen)', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad13,16', 'Model Name': 'iPad Air (5th gen)', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad12,1', 'Model Name': 'iPad 9th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad12,2', 'Model Name': 'iPad 9th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad13,8', 'Model Name': 'iPad Pro (5th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad13,9', 'Model Name': 'iPad Pro (5th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad13,10', 'Model Name': 'iPad Pro (5th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad13,11', 'Model Name': 'iPad Pro (5th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad13,4', 'Model Name': 'iPad Pro (5th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad13,5', 'Model Name': 'iPad Pro (5th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad13,6', 'Model Name': 'iPad Pro (5th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad13,7', 'Model Name': 'iPad Pro (5th gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad13,1', 'Model Name': 'iPad Air (4th gen)', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad13,2', 'Model Name': 'iPad Air (4th gen)', 'Width': 1640, 'Height': 2360},
+        {'Model ID': 'iPad11,6', 'Model Name': 'iPad 8th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad11,7', 'Model Name': 'iPad 8th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad8,11', 'Model Name': 'iPad Pro (4th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,12', 'Model Name': 'iPad Pro (4th gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,9', 'Model Name': 'iPad Pro (2nd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad8,10', 'Model Name': 'iPad Pro (2nd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad7,11', 'Model Name': 'iPad 7th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad7,12', 'Model Name': 'iPad 7th gen', 'Width': 1620, 'Height': 2160},
+        {'Model ID': 'iPad14,1', 'Model Name': 'iPad Mini (6th gen)', 'Width': 1488, 'Height': 2266},
+        {'Model ID': 'iPad14,2', 'Model Name': 'iPad Mini (6th gen)', 'Width': 1488, 'Height': 2266},
+        {'Model ID': 'iPad11,1', 'Model Name': 'iPad Mini (5th gen)', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad11,2', 'Model Name': 'iPad Mini (5th gen)', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad11,3', 'Model Name': 'iPad Air (3rd gen)', 'Width': 1668, 'Height': 2224},
+        {'Model ID': 'iPad11,4', 'Model Name': 'iPad Air (3rd gen)', 'Width': 1668, 'Height': 2224},
+        {'Model ID': 'iPad8,5', 'Model Name': 'iPad Pro (3rd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,6', 'Model Name': 'iPad Pro (3rd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,7', 'Model Name': 'iPad Pro (3rd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,8', 'Model Name': 'iPad Pro (3rd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad8,1', 'Model Name': 'iPad Pro (3rd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad8,2', 'Model Name': 'iPad Pro (3rd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad8,3', 'Model Name': 'iPad Pro (3rd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad8,4', 'Model Name': 'iPad Pro (3rd gen 11")', 'Width': 1668, 'Height': 2388},
+        {'Model ID': 'iPad7,5', 'Model Name': 'iPad 6th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad7,6', 'Model Name': 'iPad 6th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad7,1', 'Model Name': 'iPad Pro (2nd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad7,2', 'Model Name': 'iPad Pro (2nd gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad7,3', 'Model Name': 'iPad Pro (2nd gen 10.5")', 'Width': 1668, 'Height': 2224},
+        {'Model ID': 'iPad7,4', 'Model Name': 'iPad Pro (2nd gen 10.5")', 'Width': 1668, 'Height': 2224},
+        {'Model ID': 'iPad6,11', 'Model Name': 'iPad 5th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad6,12', 'Model Name': 'iPad 5th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad6,3', 'Model Name': 'iPad Pro (1st gen 9.7”)', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad6,4', 'Model Name': 'iPad Pro (1st gen 9.7”)', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad6,7', 'Model Name': 'iPad Pro (1st gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad6,8', 'Model Name': 'iPad Pro (1st gen 12.9")', 'Width': 2048, 'Height': 2732},
+        {'Model ID': 'iPad5,1', 'Model Name': 'iPad mini 4', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad5,2', 'Model Name': 'iPad mini 4', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad5,3', 'Model Name': 'iPad Air 2', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad5,4', 'Model Name': 'iPad Air 2', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,7', 'Model Name': 'iPad mini 3', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,8', 'Model Name': 'iPad mini 3', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,9', 'Model Name': 'iPad mini 3', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,4', 'Model Name': 'iPad mini 2', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,5', 'Model Name': 'iPad mini 2', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,6', 'Model Name': 'iPad mini 2', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,1', 'Model Name': 'iPad Air', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,2', 'Model Name': 'iPad Air', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad4,3', 'Model Name': 'iPad Air', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad3,4', 'Model Name': 'iPad 4th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad3,5', 'Model Name': 'iPad 4th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad3,6', 'Model Name': 'iPad 4th gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad2,5', 'Model Name': 'iPad mini', 'Width': 768, 'Height': 1024},
+        {'Model ID': 'iPad2,6', 'Model Name': 'iPad mini', 'Width': 768, 'Height': 1024},
+        {'Model ID': 'iPad2,7', 'Model Name': 'iPad mini', 'Width': 768, 'Height': 1024},
+        {'Model ID': 'iPad3,1', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad3,2', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad3,3', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad2,1', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad2,2', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad2,3', 'Model Name': 'iPad 3rd gen', 'Width': 1536, 'Height': 2048},
+        {'Model ID': 'iPad1,1', 'Model Name': 'iPad 1st gen', 'Width': 768, 'Height': 1024}]
+
+    for entry in data:
+        if entry.get('Model ID').lower() == model_id.lower():
+            return entry
+    logfunc(
+        f"Warning! - Resolution not found for '{model_id}', contact developers to add resolution into the get_resolution_for_model_id function")
+    return None
+
+
+def convert_bytes_to_unit(size):
+    for unit in ['bytes', 'KB', 'MB', 'GB']:
+        if size < 1024.0:
+            return f"{size:3.1f} {unit}"
+        size /= 1024.0
+    return size
 

@@ -1,12 +1,14 @@
 import os
 import struct
 import blackboxprotobuf
-from datetime import datetime, timezone
+from datetime import *
 from time import mktime
 from io import StringIO
 from io import BytesIO
+from scripts.ccl import ccl_segb1
+from scripts.ccl import ccl_segb2
 from scripts.artifact_report import ArtifactHtmlReport
-from scripts.ilapfuncs import logfunc, tsv, timeline, is_platform_windows, open_sqlite_db_readonly, convert_utc_human_to_timezone, timestampsconv
+from scripts.ilapfuncs import logfunc, tsv, timeline, is_platform_windows, open_sqlite_db_readonly, convert_utc_human_to_timezone, timestampsconv, convert_ts_int_to_utc
 
 def utf8_in_extended_ascii(input_string, *, raise_on_unexpected=False):
     """Returns a tuple of bool (whether mis-encoded utf-8 is present) and str (the converted string)"""
@@ -66,9 +68,19 @@ def utf8_in_extended_ascii(input_string, *, raise_on_unexpected=False):
     
     return mis_encoded_utf8_present, "".join(output)
 
+def checksegbv(in_path):
+    MAGIC = b"SEGB"
+    with open(in_path, "rb") as f:
+        magic = f.read(4)
+        
+    if magic != MAGIC:
+        return (False)
+    else:
+        return (True)
+
 def get_biomeWifi(files_found, report_folder, seeker, wrap_text, timezone_offset):
 
-    typess = {'1': {'type': 'message', 'message_typedef': {'1': {'type': 'bytes', 'name': ''}, '2': {'type': 'message', 'message_typedef': {'1': {'type': 'int', 'name': ''}, '2': {'type': 'int', 'name': ''}}, 'name': ''}}, 'name': ''}, '2': {'type': 'double', 'name': ''}, '3': {'type': 'double', 'name': ''}, '4': {'type': 'message', 'message_typedef': {'1': {'type': 'message', 'message_typedef': {'1': {'type': 'int', 'name': ''}, '2': {'type': 'int', 'name': ''}}, 'name': ''}, '3': {'type': 'str', 'name': ''}}, 'name': ''}, '5': {'type': 'str', 'name': ''}, '8': {'type': 'fixed64', 'name': ''}, '10': {'type': 'int', 'name': ''}}
+    typess = {'1': {'type': 'message', 'message_typedef': {'1': {'type': 'bytes', 'name': ''}, '2': {'type': 'message', 'message_typedef': {'1': {'type': 'int', 'name': ''}, '2': {'type': 'int', 'name': ''}}, 'name': ''}}, 'name': ''}, '2': {'type': 'double', 'name': ''}, '3': {'type': 'double', 'name': ''}, '4': {'type': 'message', 'message_typedef': {'1': {'type': 'message', 'message_typedef': {'1': {'type': 'int', 'name': ''}, '2': {'type': 'int', 'name': ''}}, 'name': ''}, '3': {'type': 'bytes', 'message_typedef': {'8': {'type': 'fixed64', 'name': ''}}, 'name': ''}}, 'name': ''}, '5': {'type': 'bytes', 'name': ''}, '8': {'type': 'fixed64', 'name': ''}, '10': {'type': 'int', 'name': ''}}
     
 
     for file_found in files_found:
@@ -83,77 +95,60 @@ def get_biomeWifi(files_found, report_folder, seeker, wrap_text, timezone_offset
                 pass
         else:
             continue
-    
-        with open(file_found, 'rb') as file:
-            data = file.read()
-            
+        
         data_list = []
-        headerloc = data.index(b'SEGB')
-        #print(headerloc)
-        
-        b = data
-        ab = BytesIO(b)
-        ab.seek(headerloc)
-        ab.read(4) #Main header
-        #print('---- Start of Notifications ----')
-        
-        while True:
-            #print('----')
-            sizeofnotificatoninhex = (ab.read(4))
-            try:
-                sizeofnotificaton = (struct.unpack_from("<i",sizeofnotificatoninhex)[0])
-            except:
-                break
-            if sizeofnotificaton == 0:
-                break
-            
-            allocation = ab.read(4)
-            
-            date1 = ab.read(8) 
-            date1 = (struct.unpack_from("<d",date1)[0])
-            convertedtime1 = timestampsconv(date1)
-            #print(convertedtime1)
-            segbtime = convertedtime1
-            
-            date2 = ab.read(8)
-            date2 = (struct.unpack_from("<d",date2)[0])
-            convertedtime2 = timestampsconv(date2)
-            #print(convertedtime2)
-            
-            
-            ignore1 = ab.read(8)
-            
-            protostuff = ab.read(sizeofnotificaton)
-            
-            checkforempty = BytesIO(protostuff)
-            check = checkforempty.read(1)
-            if check == b'\x00':
-                pass
-            else:
-                protostuff, types = blackboxprotobuf.decode_message(protostuff,typess)
+        if (checksegbv(file_found)): #SEGB v2
+            for record in ccl_segb2.read_segb2_file(file_found):
+                offset = record.data_start_offset
+                metadata_offset = record.metadata.metadata_offset
+                state = record.metadata.state.name
+                ts = record.metadata.creation
+                ts = ts.replace(tzinfo=timezone.utc)
+                data = record.data
                 
-                #pp = pprint.PrettyPrinter(indent=4)
-                #pp.pprint(protostuff)
-                #print(types)
+                if state == 'Written':
+                    
+                    protostuff, types = blackboxprotobuf.decode_message(data[8:],typess)
+                    timestart = (timestampsconv(protostuff['2']))
+                    #timeend = (timestampsconv(protostuff['3']))
+                    #timeend = convert_ts_int_to_utc(timeend)
+                    event = protostuff['1']['1']
+                    guid = protostuff['5'].decode()
+                    device = protostuff['4'].get('3','')
+                    if device != '':
+                        device = device.decode()
+                        
+                    data_list.append((ts, timestart, offset, metadata_offset, event, device, guid))
+                    
+                else:
+                    pass
+        else: #SEGB v1
+            for record in ccl_segb1.read_segb1_file(file_found):
+                offset = record.data_start_offset
+                data = record.data
+                ts1 = record.timestamp1
+                ts2 = record.timestamp2
+                ts1 = ts1.replace(tzinfo=timezone.utc)
+                ts2 = ts2.replace(tzinfo=timezone.utc)
                 
-                timestart = (timestampsconv(protostuff['2']))
-                timestart = convert_utc_human_to_timezone(timestart, timezone_offset)
-                
-                timeend = (timestampsconv(protostuff['3']))
-                timeend = convert_utc_human_to_timezone(timeend, timezone_offset)
-                
-                
-                network = protostuff['4']['3']
-                
-                data_list.append((timestart, timeend, network))
-        
-            modresult = (sizeofnotificaton % 8)
-            resultante =  8 - modresult
-            
-            if modresult == 0:
-                pass
-            else:
-                ab.read(resultante)
+                if data[0:1] == b'\x00':
+                    state = 'Deleted'
+                else:
+                    state = 'Written'
+                    
+                if state == 'Written':
+                    
+                    protostuff, types = blackboxprotobuf.decode_message(data,typess)
+                    timestart = (timestampsconv(protostuff['2']))
+                    #timeend = (timestampsconv(protostuff['3']))
+                    #timeend = convert_ts_int_to_utc(timeend)
+                    event = protostuff['1']['1']
+                    guid = protostuff['5'].decode()
+                    device = protostuff['4'].get('3','')
+                    if device != '':
+                        device = device.decode()
+                        
+                    data_list.append((ts1, timestart, offset, '', event, device, guid))
         
         if len(data_list) > 0:
         
@@ -161,7 +156,7 @@ def get_biomeWifi(files_found, report_folder, seeker, wrap_text, timezone_offset
             report = ArtifactHtmlReport(f'Biome WIFI')
             report.start_artifact_report(report_folder, f'Biome WIFI - {filename}', description)
             report.add_script()
-            data_headers = ('Time Start','Time End', 'Device')
+            data_headers = ('Timestamp Written','Timestamp', 'Offset', 'Metadata Offset','Event', 'Device', 'GUID')
             report.write_artifact_data_table(data_headers, data_list, file_found)
             report.end_artifact_report()
             

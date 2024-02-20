@@ -119,6 +119,6 @@ def get_Gmail(files_found, report_folder, seeker, wrap_text, timezone_offset):
 __artifacts__ = {
     "gmail": (
         "gmail",
-        ('**/private/var/mobile/Containers/Data/Application/*/Library/Application Support/data/*/searchsqlitedb*','**/private/var/mobile/Containers/Data/Application/*/Library/Application Support/data/*/sqlitedb*'),
+        ('*/mobile/Containers/Data/Application/*/Library/Application Support/data/*/searchsqlitedb*','*/mobile/Containers/Data/Application/*/Library/Application Support/data/*/sqlitedb*'),
         get_Gmail)
 }
